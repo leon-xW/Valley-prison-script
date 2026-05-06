@@ -1,7 +1,7 @@
 local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
 
 local Window = Rayfield:CreateWindow({
-   Name = "Velly Prison | V2",
+   Name = "Valley Prison | V2",
    LoadingTitle = "Fixing Wall Check...",
    LoadingSubtitle = "Raycast Precision Enabled",
    ConfigurationSaving = {Enabled = false}
