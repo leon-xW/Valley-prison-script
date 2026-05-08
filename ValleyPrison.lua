@@ -96,7 +96,6 @@ local function ApplyESP(Player)
                 ShouldShow = (MyTeam ~= TargetTeam)
             end
 
-            -- إخفاء الـ ESP إذا كان اللاعب ميتاً
             local Hum = Char:FindFirstChildOfClass("Humanoid")
             local IsAlive = Hum and Hum.Health > 0
 
@@ -117,7 +116,7 @@ end
 for _, v in pairs(Players:GetPlayers()) do ApplyESP(v) end
 Players.PlayerAdded:Connect(ApplyESP)
 
--- [5] Targeting Logic (Aimbot) - تمت إضافة فحص الحياة هنا
+-- [5] Targeting Logic (Aimbot) - تم تحسين نظام الفرق هنا
 local function GetClosest()
     local Target = nil
     local MaxDist = Settings.FOV
@@ -125,21 +124,28 @@ local function GetClosest()
 
     for _, v in pairs(Players:GetPlayers()) do
         if v ~= LocalPlayer and v.Character and v.Character:FindFirstChild(Settings.AimPart) then
-            -- فحص هل اللاعب مقتول؟
             local Hum = v.Character:FindFirstChildOfClass("Humanoid")
-            if not Hum or Hum.Health <= 0 then continue end -- إذا ميت تخطاه
+            if not Hum or Hum.Health <= 0 then continue end
 
             if Settings.TeamCheck then
                 local MyTeam = (LocalPlayer.Team and LocalPlayer.Team.Name:lower()) or ""
                 local TargetTeam = (v.Team and v.Team.Name:lower()) or ""
 
-                local IsMeC = MyTeam:find("police") or MyTeam:find("guard") or MyTeam:find("department")
-                local IsTargetC = TargetTeam:find("police") or TargetTeam:find("guard") or TargetTeam:find("department")
-                local IsMeP = MyTeam:find("inmate") or MyTeam:find("min") or MyTeam:find("med") or MyTeam:find("max") or MyTeam:find("escape")
-                local IsTargetP = TargetTeam:find("inmate") or TargetTeam:find("min") or TargetTeam:find("med") or TargetTeam:find("max") or TargetTeam:find("escape")
+                -- تعريف القوائم (شرطة ضد سجناء وهاربين)
+                local IsMeC = MyTeam:find("police") or MyTeam:find("guard") or MyTeam:find("department") or MyTeam:find("state")
+                local IsTargetC = TargetTeam:find("police") or TargetTeam:find("guard") or TargetTeam:find("department") or TargetTeam:find("state")
+                
+                local IsMeP = MyTeam:find("inmate") or MyTeam:find("min") or MyTeam:find("med") or MyTeam:find("max") or MyTeam:find("escape") or MyTeam:find("crim")
+                local IsTargetP = TargetTeam:find("inmate") or TargetTeam:find("min") or TargetTeam:find("med") or TargetTeam:find("max") or TargetTeam:find("escape") or TargetTeam:find("crim")
 
-                if (IsMeC and IsTargetC) or (IsMeP and IsTargetP) or (LocalPlayer.Team == v.Team) then 
+                -- إذا كنا الاثنين شرطة أو الاثنين سجناء/هاربين، لا تستهدفه
+                if (IsMeC and IsTargetC) or (IsMeP and IsTargetP) then 
                     continue 
+                end
+                
+                -- حماية إضافية في حال كان الفريقين متطابقين تماماً بالأسماء
+                if LocalPlayer.Team == v.Team and MyTeam ~= "" then
+                    continue
                 end
             end
 
@@ -237,7 +243,6 @@ RunService.RenderStepped:Connect(function()
     if Settings.Aimbot then
         local Target = GetClosest()
         if Target and Target.Character and Target.Character:FindFirstChild(Settings.AimPart) then
-            -- تأكيد إضافي قبل التحريك
             local Hum = Target.Character:FindFirstChildOfClass("Humanoid")
             if Hum and Hum.Health > 0 then
                 Camera.CFrame = CFrame.lookAt(Camera.CFrame.Position, Target.Character[Settings.AimPart].Position)
