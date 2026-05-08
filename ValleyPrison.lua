@@ -14,7 +14,8 @@ local Settings = {
     TeamCheck = true,
     WallCheck = false,
     ESP_Enabled = false,
-    ESP_Distance = 500
+    ESP_Distance = 500,
+    AimPart = "Head" 
 }
 
 local Camera = workspace.CurrentCamera
@@ -63,52 +64,43 @@ local function IsVisible(TargetPart)
     return Result == nil
 end
 
--- [4] Full Dynamic ESP Filter (Inmate, Escape, Police)
+-- [4] Full Dynamic ESP Filter
 local function ApplyESP(Player)
     if Player == LocalPlayer then return end
-    
+
     RunService.RenderStepped:Connect(function()
         local Char = Player.Character
         local MyChar = LocalPlayer.Character
-        
+
         if Char and Char:FindFirstChild("HumanoidRootPart") and MyChar and MyChar:FindFirstChild("HumanoidRootPart") then
             local Highlight = Char:FindFirstChild("ESPHighlight") or Instance.new("Highlight", Char)
             Highlight.Name = "ESPHighlight"
-            
+
             local Distance = (MyChar.HumanoidRootPart.Position - Char.HumanoidRootPart.Position).Magnitude
-            
+
             local ShouldShow = false
             local MyTeam = (LocalPlayer.Team and LocalPlayer.Team.Name:lower()) or ""
             local TargetTeam = (Player.Team and Player.Team.Name:lower()) or ""
 
-            -- تعريف المجموعات (سجناء وهاربين ضد شرطة)
             local IsMePrisonerOrEscape = MyTeam:find("inmate") or MyTeam:find("min") or MyTeam:find("med") or MyTeam:find("max") or MyTeam:find("escape") or MyTeam:find("crim")
             local IsTargetPrisonerOrEscape = TargetTeam:find("inmate") or TargetTeam:find("min") or TargetTeam:find("med") or TargetTeam:find("max") or TargetTeam:find("escape") or TargetTeam:find("crim")
-            
+
             local IsMeCop = MyTeam:find("police") or MyTeam:find("guard") or MyTeam:find("department") or MyTeam:find("state")
             local IsTargetCop = TargetTeam:find("police") or TargetTeam:find("guard") or TargetTeam:find("department") or TargetTeam:find("state")
 
-            -- تنفيذ المنطق المطور
             if IsMePrisonerOrEscape then
-                -- إذا كنت سجين أو هارب: أظهر فقط الشرطة (احجب كل أنواع السجناء والهاربين الآخرين)
-                if IsTargetCop then
-                    ShouldShow = true
-                else
-                    ShouldShow = false
-                end
+                ShouldShow = IsTargetCop
             elseif IsMeCop then
-                -- إذا كنت شرطي: أظهر السجناء والهاربين فقط، واحجب زملائك الشرطة
-                if IsTargetPrisonerOrEscape then
-                    ShouldShow = true
-                else
-                    ShouldShow = false
-                end
+                ShouldShow = IsTargetPrisonerOrEscape
             else
-                -- لأي فريق آخر غير معرف: أظهر الخصوم فقط
                 ShouldShow = (MyTeam ~= TargetTeam)
             end
-            
-            if Settings.ESP_Enabled and ShouldShow and Distance <= Settings.ESP_Distance then
+
+            -- إخفاء الـ ESP إذا كان اللاعب ميتاً
+            local Hum = Char:FindFirstChildOfClass("Humanoid")
+            local IsAlive = Hum and Hum.Health > 0
+
+            if Settings.ESP_Enabled and ShouldShow and Distance <= Settings.ESP_Distance and IsAlive then
                 Highlight.Enabled = true
                 Highlight.FillColor = Player.TeamColor.Color
                 Highlight.OutlineColor = Color3.fromRGB(255, 255, 255)
@@ -125,18 +117,22 @@ end
 for _, v in pairs(Players:GetPlayers()) do ApplyESP(v) end
 Players.PlayerAdded:Connect(ApplyESP)
 
--- [5] Targeting Logic (Aimbot)
+-- [5] Targeting Logic (Aimbot) - تمت إضافة فحص الحياة هنا
 local function GetClosest()
     local Target = nil
     local MaxDist = Settings.FOV
     local Center = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2)
 
     for _, v in pairs(Players:GetPlayers()) do
-        if v ~= LocalPlayer and v.Character and v.Character:FindFirstChild("Head") then
+        if v ~= LocalPlayer and v.Character and v.Character:FindFirstChild(Settings.AimPart) then
+            -- فحص هل اللاعب مقتول؟
+            local Hum = v.Character:FindFirstChildOfClass("Humanoid")
+            if not Hum or Hum.Health <= 0 then continue end -- إذا ميت تخطاه
+
             if Settings.TeamCheck then
                 local MyTeam = (LocalPlayer.Team and LocalPlayer.Team.Name:lower()) or ""
                 local TargetTeam = (v.Team and v.Team.Name:lower()) or ""
-                
+
                 local IsMeC = MyTeam:find("police") or MyTeam:find("guard") or MyTeam:find("department")
                 local IsTargetC = TargetTeam:find("police") or TargetTeam:find("guard") or TargetTeam:find("department")
                 local IsMeP = MyTeam:find("inmate") or MyTeam:find("min") or MyTeam:find("med") or MyTeam:find("max") or MyTeam:find("escape")
@@ -147,11 +143,12 @@ local function GetClosest()
                 end
             end
 
-            local Pos, OnScreen = Camera:WorldToViewportPoint(v.Character.Head.Position)
+            local TargetPart = v.Character[Settings.AimPart]
+            local Pos, OnScreen = Camera:WorldToViewportPoint(TargetPart.Position)
             if OnScreen then
                 local Dist = (Vector2.new(Pos.X, Pos.Y) - Center).Magnitude
                 if Dist < MaxDist then
-                    if IsVisible(v.Character.Head) then
+                    if IsVisible(TargetPart) then
                         Target = v
                         MaxDist = Dist
                     end
@@ -171,6 +168,16 @@ CombatTab:CreateToggle({
    Name = "Enable Aimbot",
    CurrentValue = false,
    Callback = function(Value) Settings.Aimbot = Value end,
+})
+
+CombatTab:CreateDropdown({
+   Name = "Aim Part",
+   Options = {"Head", "HumanoidRootPart", "LeftLeg", "RightLeg"},
+   CurrentOption = {"Head"},
+   MultipleOptions = false,
+   Callback = function(Option)
+       Settings.AimPart = Option[1]
+   end,
 })
 
 CombatTab:CreateToggle({
@@ -225,21 +232,16 @@ TeleportTab:CreateButton({
    end,
 })
 
-TeleportTab:CreateButton({
-   Name = "Teleport 2",
-   Callback = function()
-       if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
-           LocalPlayer.Character.HumanoidRootPart.CFrame = CFrame.new(Vector3.new(679.9663696289062, -0.6903573274612427, -438.9139709472656))
-       end
-   end,
-})
-
 -- [7] Main Loop
 RunService.RenderStepped:Connect(function()
     if Settings.Aimbot then
         local Target = GetClosest()
-        if Target and Target.Character and Target.Character:FindFirstChild("Head") then
-            Camera.CFrame = CFrame.lookAt(Camera.CFrame.Position, Target.Character.Head.Position)
+        if Target and Target.Character and Target.Character:FindFirstChild(Settings.AimPart) then
+            -- تأكيد إضافي قبل التحريك
+            local Hum = Target.Character:FindFirstChildOfClass("Humanoid")
+            if Hum and Hum.Health > 0 then
+                Camera.CFrame = CFrame.lookAt(Camera.CFrame.Position, Target.Character[Settings.AimPart].Position)
+            end
         end
     end
 end)
